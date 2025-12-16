@@ -1,0 +1,14 @@
+node_modules/
+package-lock.json
+Chrome
+Chrome.rar
+
+command
+.env
+nginx.js
+test.js
+test2.js
+browsers.test.http
+
+.env
+screenshots/

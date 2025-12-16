@@ -1,0 +1,457 @@
+================================================================================
+                    BROWSER SERVER API DOCUMENTATION
+================================================================================
+
+Base URL: http://localhost:3000
+Authentication: X-API-Key header or ?apiKey= query parameter
+Rate Limits: Configurable via .env file
+
+================================================================================
+                            AUTHENTICATION
+================================================================================
+
+All endpoints (except /health) require API key:
+
+Method 1 (Header):
+  X-API-Key: your-api-key-here
+
+Method 2 (Query Parameter):
+  ?apiKey=your-api-key-here
+
+================================================================================
+                              ENDPOINTS
+================================================================================
+
+--------------------------------------------------------------------------------
+1. HEALTH CHECK
+--------------------------------------------------------------------------------
+GET /health
+
+Description: Check server status (no authentication required)
+
+Response:
+{
+  "status": "ok",
+  "timestamp": "2025-12-09T13:14:15.123Z"
+}
+
+Rate Limit: 100 requests/minute
+
+Example:
+curl http://localhost:3000/health
+
+
+--------------------------------------------------------------------------------
+2. CREATE SINGLE BROWSER
+--------------------------------------------------------------------------------
+POST /browsers
+
+Description: Create a single browser instance
+
+Request Body:
+{
+  "headful": false  // optional, boolean, default: false
+}
+
+Response:
+{
+  "id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "wss": "ws://127.0.0.1:8000/devtools/browser/abc123",
+  "port": 8000,
+  "headful": false
+}
+
+Errors:
+- 400: Invalid request body format
+- 401: Missing API key
+- 403: Invalid API key
+- 429: Rate limit exceeded (50 creates/minute)
+- 500: Browser creation failed
+
+Rate Limit: 50 requests/minute
+
+Example:
+curl -X POST http://localhost:3000/browsers \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"headful": false}'
+
+
+--------------------------------------------------------------------------------
+3. BULK CREATE BROWSERS
+--------------------------------------------------------------------------------
+POST /browsers/bulk
+
+Description: Create multiple browser instances in parallel
+
+Request Body:
+{
+  "count": 5,       // optional, number, 1-50, default: 1
+  "headful": false  // optional, boolean, default: false
+}
+
+Response:
+{
+  "requested": 5,
+  "created": 5,
+  "failed": 0,
+  "browsers": [
+    {
+      "id": "uuid-1",
+      "wss": "ws://127.0.0.1:8000/devtools/browser/abc123",
+      "port": 8000,
+      "headful": false
+    }
+  ]
+}
+
+Rate Limit: 10 requests/minute (stricter than single create)
+
+Example:
+curl -X POST http://localhost:3000/browsers/bulk \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"count": 3, "headful": false}'
+
+
+--------------------------------------------------------------------------------
+4. LIST ALL BROWSERS
+--------------------------------------------------------------------------------
+GET /browsers
+
+Description: Get all active browser instances
+
+Response:
+{
+  "total": 5,
+  "available": 45,
+  "max": 50,
+  "browsers": [
+    {
+      "id": "uuid-1",
+      "wss": "ws://127.0.0.1:8000/devtools/browser/abc",
+      "port": 8000,
+      "headful": false,
+      "uptime": 125000,
+      "pid": 12345
+    }
+  ]
+}
+
+Rate Limit: 100 requests/minute
+
+
+--------------------------------------------------------------------------------
+5. GET SINGLE BROWSER
+--------------------------------------------------------------------------------
+GET /browsers/:id
+
+Description: Get details of a specific browser by ID
+
+Path Parameters:
+- id: Browser UUID (required)
+
+Response:
+{
+  "id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "wss": "ws://127.0.0.1:8000/devtools/browser/abc123",
+  "port": 8000,
+  "headful": false,
+  "uptime": 125000,
+  "pid": 12345
+}
+
+Errors:
+- 400: Invalid browser ID format
+- 404: Browser not found
+
+
+--------------------------------------------------------------------------------
+6. GET BROWSER STATISTICS
+--------------------------------------------------------------------------------
+GET /browsers/stats/summary
+
+Description: Get aggregate statistics about all browsers
+
+Response:
+{
+  "total": 10,
+  "available": 40,
+  "max": 50,
+  "headful": 2,
+  "headless": 8,
+  "averageUptime": 300000,
+  "oldestBrowser": 600000
+}
+
+Rate Limit: 100 requests/minute
+
+
+--------------------------------------------------------------------------------
+7. BROWSER HEALTH CHECK
+--------------------------------------------------------------------------------
+GET /browsers/:id/health
+
+Description: Check if a specific browser is healthy and responsive
+
+Response (Healthy):
+{
+  "browserId": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "status": "healthy",
+  "uptime": 125000,
+  "port": 8000,
+  "headful": false,
+  "version": "Google Chrome for Testing 143.0.7499.4"
+}
+
+Response (Unhealthy):
+{
+  "browserId": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "status": "unhealthy",
+  "error": "DevTools not responding"
+}
+
+
+--------------------------------------------------------------------------------
+8. DELETE SINGLE BROWSER
+--------------------------------------------------------------------------------
+DELETE /browsers/:id
+
+Description: Delete a specific browser instance
+
+Response:
+{
+  "deleted": true,
+  "browserId": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+}
+
+
+--------------------------------------------------------------------------------
+9. DELETE ALL BROWSERS (BULK)
+--------------------------------------------------------------------------------
+DELETE /browsers/bulk
+
+Description: Delete all active browser instances
+
+Response:
+{
+  "deleted": 10,
+  "total": 10,
+  "message": "Deleted 10/10 browsers"
+}
+
+
+================================================================================
+                          WEBSOCKET PROXY
+================================================================================
+
+WS /wss?browserId=<browser-id>
+
+Description: Connect to browser via rate-limited proxy
+
+Query Parameters:
+- browserId: Browser UUID (required)
+
+Connection URL:
+ws://localhost:3000/wss?browserId=a1b2c3d4-e5f6-4789-a012-3456789abcde
+
+Rate Limits:
+- 50 concurrent connections per minute per IP
+- 1000 messages per minute per IP
+
+Puppeteer Example:
+const browser = await connect({ 
+  browserWSEndpoint: 'ws://localhost:3000/wss?browserId=abc-123'
+});
+
+
+================================================================================
+                            RATE LIMITS
+================================================================================
+
+Endpoint             | Limit          | Window
+---------------------|----------------|-------------
+General API          | 100 requests   | 60 seconds
+Single Create        | 50 requests    | 60 seconds
+Bulk Create          | 10 requests    | 60 seconds
+WSS Connections      | 50 connections | 60 seconds
+WSS Messages         | 1000 messages  | 60 seconds
+
+
+================================================================================
+                            ERROR CODES
+================================================================================
+
+Code | Meaning               | Common Causes
+-----|-----------------------|-----------------------------------
+400  | Bad Request           | Invalid JSON, validation failed
+401  | Unauthorized          | Missing API key
+403  | Forbidden             | Invalid API key
+404  | Not Found             | Browser ID doesn't exist
+429  | Too Many Requests     | Rate limit exceeded
+500  | Internal Server Error | Browser spawn failed
+503  | Service Unavailable   | Browser unhealthy, max capacity
+
+
+================================================================================
+                      CONFIGURATION (.env)
+================================================================================
+
+# Server Settings
+PORT=3000
+MAX_BROWSERS=50
+API_KEY=your-super-secret-key-change-this
+
+# HTTP Rate Limits
+RATE_LIMIT_WINDOW_MS=60000           # 1 minute
+RATE_LIMIT_MAX_REQUESTS=100          # General API
+RATE_LIMIT_BULK_MAX=10               # Bulk create
+RATE_LIMIT_CREATE_MAX=50             # Single create
+
+# WebSocket Rate Limits  
+WSS_RATE_LIMIT_WINDOW_MS=60000       # 1 minute
+WSS_RATE_LIMIT_MAX_CONNECTIONS=50    # Max connections
+WSS_RATE_LIMIT_MAX_MESSAGES=1000     # Max messages
+
+# Database
+MONGO_URL=mongodb://localhost:27017
+
+# Chromium (auto-detected if not set)
+CHROMIUM_PATH="/path/to/chromium"
+
+
+================================================================================
+                      CLIENT EXAMPLES
+================================================================================
+
+JavaScript/Node.js:
+------------------
+import axios from 'axios';
+import { connect } from 'puppeteer-core';
+
+const client = axios.create({
+  baseURL: 'http://localhost:3000',
+  headers: { 'X-API-Key': 'your-key' }
+});
+
+const { data } = await client.post('/browsers', { headful: false });
+const browser = await connect({ browserWSEndpoint: data.wss });
+await client.delete(`/browsers/${data.id}`);
+
+
+Python:
+-------
+import requests
+
+BASE_URL = "http://localhost:3000"
+HEADERS = {"X-API-Key": "your-key"}
+
+response = requests.post(
+    f"{BASE_URL}/browsers", 
+    json={"headful": False},
+    headers=HEADERS
+)
+browser = response.json()
+
+requests.delete(f"{BASE_URL}/browsers/{browser['id']}", headers=HEADERS)
+
+
+cURL:
+-----
+# Create browser
+curl -X POST http://localhost:3000/browsers \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"headful": false}'
+
+# List browsers
+curl http://localhost:3000/browsers -H "X-API-Key: your-key"
+
+# Delete all
+curl -X DELETE http://localhost:3000/browsers/bulk \
+  -H "X-API-Key: your-key"
+
+
+================================================================================
+                          BEST PRACTICES
+================================================================================
+
+1. Resource Management:
+   - Always delete browsers after use
+   - Each browser uses ~2GB RAM
+   - Set MAX_BROWSERS based on available RAM
+
+2. Performance:
+   - Use bulk endpoint for multiple browsers
+   - Use headless mode in production
+   - Reuse browsers when possible
+
+3. Rate Limiting:
+   - Monitor rate limit headers
+   - Implement exponential backoff on 429
+   - Distribute requests across time
+
+4. Monitoring:
+   - Use health endpoint to check status
+   - Monitor /browsers/stats/summary
+   - Set up alerts for 500/503 errors
+
+5. Security:
+   - Keep API_KEY secret and rotate regularly
+   - Use HTTPS in production
+   - Implement IP whitelisting
+   - Set appropriate rate limits
+
+
+================================================================================
+                          TROUBLESHOOTING
+================================================================================
+
+Problem: "Max browsers reached" error
+Solution: Delete unused browsers or increase MAX_BROWSERS
+
+Problem: Rate limit 429 errors
+Solution: Implement backoff or increase limits in .env
+
+Problem: Browser creation timeout
+Solution: Check Chromium path, increase timeout, check RAM
+
+Problem: WebSocket connection refused
+Solution: Verify browser exists, check port, verify health
+
+Problem: "Browser not found" 404
+Solution: Browser may have crashed, check stats endpoint
+
+Problem: High memory usage
+Solution: Reduce MAX_BROWSERS, enable auto-cleanup
+
+
+================================================================================
+                      SYSTEM REQUIREMENTS
+================================================================================
+
+Minimum:
+- Node.js 18+
+- 8GB RAM (3-4 browsers)
+- 2GB disk space
+
+Recommended:
+- Node.js 20+
+- 32GB RAM (15-20 browsers)
+- 10GB disk space
+- SSD storage
+- 4+ CPU cores
+
+Production:
+- Node.js 20+ LTS
+- 64GB+ RAM (30-50 browsers)
+- 20GB+ disk space
+- NVMe SSD
+- 8+ CPU cores
+- MongoDB for logging
+
+
+================================================================================
+API Version: 1.0
+Last Updated: December 9, 2025
+================================================================================
