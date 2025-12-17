@@ -118,15 +118,18 @@ export const validateBulkCreate = (req, res, next) => {
 export const validateBrowserId = (req, res, next) => {
   const { id } = req.params;
   
-  // UUID v4 format validation
+  // Accept both pure UUID v4 and domain-prefixed UUID v4
+  // Pure: b354e854-b846-4dcb-845f-7219fb5bd08e
+  // Prefixed: browser-scrapingdog-com_b354e854-b846-4dcb-845f-7219fb5bd08e
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const prefixedUuidRegex = /^[a-z0-9-]+_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   
-  if (!id || !uuidRegex.test(id)) {
+  if (!id || !(uuidRegex.test(id) || prefixedUuidRegex.test(id))) {
     return res.status(400).json({
       error: 'Invalid browser ID',
-      message: 'Browser ID must be a valid UUID v4',
+      message: 'Browser ID must be a valid UUID v4 (with or without domain prefix)',
       receivedValue: id,
-      expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx',
+      expectedFormat: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx or domain_xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx',
       example: 'a1b2c3d4-e5f6-4789-a012-3456789abcde',
       tip: 'Get valid IDs from GET /browsers endpoint'
     });
