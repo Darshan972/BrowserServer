@@ -53,7 +53,7 @@ class BrowserPool {
     }
 
     const uuid = uuidv4();
-    const domain = config.domain ;
+    const domain = config.domain;
     const domainPrefix = domain ? `${domain.replace(/[^a-zA-Z0-9]/g, '-')}_` : '';
     const id = `${domainPrefix}${uuid}`;
 
@@ -135,21 +135,37 @@ class BrowserPool {
   async deleteBrowser(id) {
     const browser = this.activeBrowsers.get(id);
     if (!browser) return false;
-    browser.process.kill('SIGTERM');
-    await this.cleanup(id);
+
+    try {
+      browser.process.kill('SIGTERM');
+      await Promise.race([
+        new Promise(res => browser.process.once('exit', res)),
+        new Promise((_, rej) =>
+          setTimeout(() => rej(new Error('Process did not exit')), 5000)
+        )
+      ]);
+    } catch {
+      try {
+        browser.process.kill('SIGKILL');
+      } catch { }
+    }
+
+    await this.cleanup(id, browser);
     return true;
   }
 
-  async cleanup(id) {
-    const browser = this.activeBrowsers.get(id);
-    if (browser) {
-      this.usedPorts.delete(browser.port);
-      try {
-        await fs.rm(browser.dataDir, { recursive: true, force: true });
-      } catch { }
-      this.activeBrowsers.delete(id);
-    }
+
+  async cleanup(id, browser) {
+    this.usedPorts.delete(browser.port);
+    try {
+      await fs.rm(browser.dataDir, {
+        recursive: true,
+        force: true
+      });
+    } catch { }
+    this.activeBrowsers.delete(id);
   }
+
 
   listBrowsers() {
     return Array.from(this.activeBrowsers.values()).map(b => ({

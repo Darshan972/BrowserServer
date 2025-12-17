@@ -12,3 +12,8 @@ browsers.test.http
 
 .env
 screenshots/
+logs/
+
+# Chrome installation files
+google-chrome-stable_current_amd64.deb
+*.deb
