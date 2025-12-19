@@ -124,6 +124,8 @@ router.get('/:id/ws', validateBrowserId, (req, res) => {
 
 router.delete('/bulk', async (req, res) => {
   const pool = req.pool;
+  const countParam = parseInt(req.query.count, 10);
+
   try {
     const ids = Array.from(pool.activeBrowsers.keys());
     const total = ids.length;
@@ -131,13 +133,19 @@ router.delete('/bulk', async (req, res) => {
     if (total === 0) {
       return res.json({
         deleted: 0,
+        total: 0,
         message: 'No active browsers to delete'
       });
     }
 
+    const limit = Number.isInteger(countParam)
+      ? Math.min(countParam, total)
+      : total;
+
     let deleted = 0;
-    for (const id of ids) {
-      if (await pool.deleteBrowser(id)) deleted++;
+
+    for (let i = 0; i < limit; i++) {
+      if (await pool.deleteBrowser(ids[i])) deleted++;
     }
 
     res.json({
@@ -149,6 +157,7 @@ router.delete('/bulk', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 router.delete('/:id', validateBrowserId, async (req, res) => {
   const pool = req.pool;

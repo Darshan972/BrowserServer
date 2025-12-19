@@ -24,28 +24,6 @@ class BrowserPool {
     this.portStart = 9222;
   }
 
-  async getFreePort() {
-    for (let port = 8000; port < 8100; port++) {
-      if (!this.usedPorts.has(port)) {
-        try {
-          await new Promise((resolve, reject) => {
-            const tester = createServer()
-              .once('error', reject)
-              .once('listening', () => {
-                tester.close(() => resolve(port));
-              });
-            tester.listen(port, '0.0.0.0');
-          });
-          this.usedPorts.add(port);
-          return port;
-        } catch {
-          continue;
-        }
-      }
-    }
-    throw new Error('No free ports 8000-8100');
-  }
-
   async createBrowser(headful = false, proxyServer) {
 
     if (this.activeBrowsers.size >= this.maxBrowsers) {
@@ -69,11 +47,6 @@ class BrowserPool {
       `--remote-debugging-address=127.0.0.1`,
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${dataDir}`,
-      `--no-first-run`,
-      `--no-default-browser-check`,
-      `--disable-dev-shm-usage`,
-      `--no-sandbox`,
-      `--password-store=basic`,
       `--window-size=1346,766`,
       headful ? '--disable-headless' : '--headless=new',
       `--disk-cache-size=67108864`,
@@ -156,7 +129,6 @@ class BrowserPool {
 
 
   async cleanup(id, browser) {
-    this.usedPorts.delete(browser.port);
     try {
       await fs.rm(browser.dataDir, {
         recursive: true,
