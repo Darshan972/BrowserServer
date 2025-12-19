@@ -162,6 +162,7 @@ router.delete('/bulk', async (req, res) => {
 router.delete('/:id', validateBrowserId, async (req, res) => {
   const id = req.query.id;
   const pool = req.pool;
+  console.log(pool)
   try {
     const deleted = await pool.deleteBrowser(id);
     if (!deleted) {
