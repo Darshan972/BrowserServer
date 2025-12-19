@@ -160,19 +160,20 @@ router.delete('/bulk', async (req, res) => {
 
 
 router.delete('/:id', validateBrowserId, async (req, res) => {
+  const id = req.query.id;
   const pool = req.pool;
   try {
-    const deleted = await pool.deleteBrowser(req.params.id);
+    const deleted = await pool.deleteBrowser(id);
     if (!deleted) {
       return res.status(404).json({
         error: 'Browser not found',
-        browserId: req.params.id,
+        browserId: id,
         tip: 'Browser may have already been deleted or never existed'
       });
     }
     res.json({
       deleted: true,
-      browserId: req.params.id
+      browserId: id
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
