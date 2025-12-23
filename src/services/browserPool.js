@@ -13,6 +13,7 @@ class BrowserPool {
     this.config = config;
     this.chromiumPath = config.chromiumPath;
     this.maxBrowsers = config.maxBrowsers || 50;
+    this.idleTimeout = config.browserIdleTimeout || 1800000; // 30 minutes
 
     if (!fsSync.existsSync(this.chromiumPath)) {
       throw new Error(`❌ Chromium NOT FOUND: ${this.chromiumPath}`);
@@ -22,6 +23,10 @@ class BrowserPool {
     this.activeBrowsers = new Map();
     this.usedPorts = new Set();
     this.portStart = 9222;
+
+    // Start idle browser cleanup - check every 5 minutes
+    this.cleanupInterval = setInterval(() => this.cleanupIdleBrowsers(), 300000);
+    console.log(`✅ Idle browser cleanup enabled (timeout: ${this.idleTimeout / 1000}s)`);
   }
 
   async createBrowser(headful = false, proxyServer) {
@@ -87,8 +92,14 @@ class BrowserPool {
             console.log(`Browser ${id.slice(0, 8)} ready: ${realWss}`);
 
             this.activeBrowsers.set(id, {
-              id, process: browserProcess, port, dataDir, wss: realWss, headful,
-              createdAt: Date.now()
+              id, 
+              process: browserProcess, 
+              port, 
+              dataDir, 
+              wss: realWss, 
+              headful,
+              createdAt: Date.now(),
+              lastActivity: Date.now() // Track last activity for idle cleanup
             });
 
             let portt = port + 1000;
@@ -140,14 +151,61 @@ class BrowserPool {
 
 
   listBrowsers() {
+    const now = Date.now();
     return Array.from(this.activeBrowsers.values()).map(b => ({
-      id: b.id, wss: b.wss, port: b.port, headful: b.headful,
-      uptime: Date.now() - b.createdAt, pid: b.process.pid
+      id: b.id, 
+      wss: b.wss, 
+      port: b.port, 
+      headful: b.headful,
+      uptime: now - b.createdAt,
+      idleTime: now - b.lastActivity,
+      pid: b.process.pid
     }));
   }
 
   getBrowser(id) {
     return this.activeBrowsers.get(id);
+  }
+
+  // Update last activity timestamp (call this when browser receives messages)
+  updateActivity(id) {
+    const browser = this.activeBrowsers.get(id);
+    if (browser) {
+      browser.lastActivity = Date.now();
+    }
+  }
+
+  // Cleanup idle browsers that haven't been used recently
+  async cleanupIdleBrowsers() {
+    const now = Date.now();
+    const idleBrowsers = [];
+
+    for (const [id, browser] of this.activeBrowsers) {
+      const idleTime = now - browser.lastActivity;
+      if (idleTime > this.idleTimeout) {
+        idleBrowsers.push({ id, idleTime });
+      }
+    }
+
+    if (idleBrowsers.length > 0) {
+      console.log(`🧹 Cleaning up ${idleBrowsers.length} idle browser(s)...`);
+      
+      for (const { id, idleTime } of idleBrowsers) {
+        console.log(`   Removing idle browser ${id.slice(0, 16)}... (idle for ${Math.round(idleTime / 1000)}s)`);
+        try {
+          await this.deleteBrowser(id);
+        } catch (error) {
+          console.error(`   Failed to cleanup browser ${id}:`, error.message);
+        }
+      }
+    }
+  }
+
+  // Cleanup interval on shutdown
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
   }
 }
 

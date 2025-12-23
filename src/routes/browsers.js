@@ -183,6 +183,12 @@ router.get('/stats/summary', (req, res) => {
   const pool = req.pool;
   const browsers = pool.listBrowsers();
   const now = Date.now();
+  
+  // Calculate idle browsers
+  const idleBrowsers = Array.from(pool.activeBrowsers.values()).filter(b => {
+    const idleTime = now - b.lastActivity;
+    return idleTime > pool.idleTimeout;
+  });
 
   res.json({
     total: pool.activeBrowsers.size,
@@ -190,6 +196,8 @@ router.get('/stats/summary', (req, res) => {
     max: config.maxBrowsers,
     headful: browsers.filter(b => b.headful).length,
     headless: browsers.filter(b => !b.headful).length,
+    idle: idleBrowsers.length,
+    idleTimeout: pool.idleTimeout / 1000, // in seconds
     averageUptime: browsers.length > 0
       ? Math.round(browsers.reduce((sum, b) => sum + (now - b.uptime), 0) / browsers.length / 1000)
       : 0,

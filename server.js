@@ -60,6 +60,7 @@ const server = http.createServer(app);
 process.on('SIGTERM', async () => {
   console.log('🛑 Graceful shutdown...');
   if (pool) {
+    pool.destroy(); // Stop idle cleanup interval
     for (const [id, browser] of pool.activeBrowsers) {
       browser.process.kill('SIGTERM');
     }

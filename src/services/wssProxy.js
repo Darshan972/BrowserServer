@@ -58,6 +58,9 @@ export const createWSSProxy = (server, pool) => {
         return;
       }
       
+      // Update last activity for idle timeout tracking
+      pool.updateActivity(browserId);
+      
       if (browserWs.readyState === WebSocket.OPEN) {
         browserWs.send(data);
       }

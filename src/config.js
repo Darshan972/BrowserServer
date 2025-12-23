@@ -5,6 +5,7 @@ const configObj = {
   domain : process.env.DOMAIN || '' ,
   port: process.env.PORT || 3000,
   maxBrowsers: parseInt(process.env.MAX_BROWSERS) || 50,
+  browserIdleTimeout: parseInt(process.env.BROWSER_IDLE_TIMEOUT) || 300000, // 5 minutes default (safe minimum)
   chromiumPath: process.env.CHROMIUM_PATH || (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : process.platform === 'win32' ? './Chrome/chrome.exe' : process.platform === 'linux' ? '/usr/bin/Chromium-browser' : null),
   mongoUrl: process.env.MONGO_URL || 'mongodb://localhost:27017',
   apiKey: process.env.API_KEY || '',
