@@ -24,9 +24,9 @@ class BrowserPool {
     this.usedPorts = new Set();
     this.portStart = 9222;
 
-    // Start idle browser cleanup - check every 5 minutes
-    this.cleanupInterval = setInterval(() => this.cleanupIdleBrowsers(), 300000);
-    console.log(`✅ Idle browser cleanup enabled (timeout: ${this.idleTimeout / 1000}s)`);
+    // Start idle browser cleanup - check every 1 minute for high-volume scenarios
+    this.cleanupInterval = setInterval(() => this.cleanupIdleBrowsers(), 60000);
+    console.log(`✅ Idle browser cleanup enabled (timeout: ${this.idleTimeout / 1000}s, check interval: 60s)`);
   }
 
   async createBrowser(headful = false, proxyServer) {
