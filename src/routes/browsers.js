@@ -23,6 +23,7 @@ router.post('/', validateCreateBrowser, createLimiter, async (req, res) => {
     const browser = await pool.createBrowser(headful, proxy);
     res.json(browser);
   } catch (error) {
+    console.log(error)
     res.status(500).json({ error: error.message });
   }
 });
