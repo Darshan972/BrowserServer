@@ -23,8 +23,40 @@ router.post('/', validateCreateBrowser, createLimiter, async (req, res) => {
     const browser = await pool.createBrowser(headful, proxy);
     res.json(browser);
   } catch (error) {
-    console.log(error)
-    res.status(500).json({ error: error.message });
+    console.error('❌ Browser creation failed:', error);
+    
+    // Better error categorization
+    if (error.message.includes('Max') && error.message.includes('browsers reached')) {
+      return res.status(503).json({ 
+        error: 'Service temporarily unavailable',
+        reason: 'Maximum browser capacity reached',
+        message: error.message,
+        available: config.maxBrowsers - pool.activeBrowsers.size,
+        max: config.maxBrowsers
+      });
+    }
+    
+    if (error.message.includes('No free ports')) {
+      return res.status(503).json({ 
+        error: 'Port exhaustion',
+        reason: 'All available ports are in use',
+        message: error.message
+      });
+    }
+    
+    if (error.message.includes('failed to start') || error.message.includes('timeout')) {
+      return res.status(503).json({ 
+        error: 'Browser startup timeout',
+        reason: 'Chromium failed to start within 20 seconds',
+        message: error.message,
+        tip: 'Server may be overloaded or out of resources'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Browser creation failed',
+      message: error.message 
+    });
   }
 });
 
