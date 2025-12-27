@@ -41,55 +41,24 @@ class BrowserPool {
     const id = `${domainPrefix}${uuid}`;
 
 
-    // ✅ FIXED: Increased port range from 8000-8100 to 9000-19000 (10,000 ports)
-    const ports = portNumbers(9000, 19000);
+    const ports = portNumbers(8000, 8100);
     const port = await getPort({ port: ports });
     const dataDir = join(tmpdir(), `browser-${id}`);
 
     await fs.mkdir(dataDir, { recursive: true });
 
-    // ✅ OPTIMIZED: Chrome args for Ubuntu server - prevents OOM kills and crashes
+
     const args = [
       `--remote-debugging-address=127.0.0.1`,
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${dataDir}`,
+      '--disable-dev-shm-usage',        // CRITICAL: Fixes /dev/shm too small
       `--window-size=1346,766`,
       headful ? '--disable-headless' : '--headless=new',
-      
-      // Memory & Performance - CRITICAL for Ubuntu servers
-      '--disable-dev-shm-usage',        // CRITICAL: Fixes /dev/shm too small
-      '--no-sandbox',                   // CRITICAL for Docker/Ubuntu servers
-      '--disable-setuid-sandbox',
-      '--disable-gpu',
-      '--disable-software-rasterizer',
-      '--disable-accelerated-2d-canvas',
-      // Removed --single-process: causes "Cannot use V8 Proxy resolver" error
-      // Removed --no-zygote: not needed without single-process
-      
-      // Cache & Disk (reduced for high concurrency)
-      '--disk-cache-size=33554432',     // 32MB
-      '--media-cache-size=16777216',    // 16MB
-      '--disable-application-cache',
-      
-      // Disable Unnecessary Features
-      '--disable-extensions',
-      '--disable-plugins',
-      '--disable-background-networking',
-      '--disable-default-apps',
-      '--disable-sync',
-      '--disable-translate',
-      '--hide-scrollbars',
-      '--mute-audio',
-      '--no-first-run',
-      '--disable-notifications',
-      '--disable-logging',
-      '--disable-permissions-api',
-      
-      // Font & Rendering (reduces memory)
-      '--font-render-hinting=none',
-      '--disable-webgl',
-      '--disable-webgl2'
+      `--disk-cache-size=67108864`,
+      `--media-cache-size=33554432`
     ].filter(Boolean);
+
 
     if (proxyServer) {
       try {
@@ -100,30 +69,16 @@ class BrowserPool {
     }
 
     const browserProcess = spawn(this.chromiumPath, args, {
-      stdio: 'pipe',  // Changed from 'ignore' to capture errors
+      stdio: 'ignore',
       // windowsHide: true
     });
-    
-    // Log Chrome stderr for debugging
-    let chromeErrors = '';
-    browserProcess.stderr?.on('data', (data) => {
-      chromeErrors += data.toString();
-    });
-
-    const maxWait = 30000;  // Increased from 20s to 30s
+    const maxWait = 20000;
     const startTime = Date.now();
-    let lastError = null;
-    let retryCount = 0;
-
-    // Give Chrome a moment to initialize before first check
-    await new Promise(r => setTimeout(r, 1000));
 
     while (Date.now() - startTime < maxWait) {
       try {
         const jsonUrl = `http://127.0.0.1:${port}/json/version`;
-        const response = await fetch(jsonUrl, { 
-          signal: AbortSignal.timeout(5000)  // 5s timeout per fetch
-        });
+        const response = await fetch(jsonUrl);
         if (response.ok) {
           const data = await response.json();
 
@@ -153,24 +108,9 @@ class BrowserPool {
             return { id, wss: realWss, portt, headful };
           }
         }
-      } catch (e) { 
-        lastError = e.message;
-        retryCount++;
-      }
-      
-      // Exponential backoff: start fast, then slow down
-      const waitTime = retryCount < 5 ? 500 : retryCount < 15 ? 1000 : 2000;
-      await new Promise(r => setTimeout(r, waitTime));
+      } catch { }
+      await new Promise(r => setTimeout(r, 500));
     }
-
-    // Browser failed to start - capture all error details
-    browserProcess.kill();
-    
-    let errorMsg = `Browser ${id} failed to start DevTools in ${maxWait}ms`;
-    if (lastError) errorMsg += ` (Last error: ${lastError})`;
-    if (chromeErrors) errorMsg += ` (Chrome stderr: ${chromeErrors.substring(0, 200)})`;
-    
-    throw new Error(errorMsg);
 
 
     browserProcess.kill();
