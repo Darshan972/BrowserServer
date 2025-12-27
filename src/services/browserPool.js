@@ -63,8 +63,8 @@ class BrowserPool {
       '--disable-gpu',
       '--disable-software-rasterizer',
       '--disable-accelerated-2d-canvas',
-      '--no-zygote',                    // Reduces memory overhead
-      '--single-process',               // Each browser is isolated
+      // Removed --single-process: causes "Cannot use V8 Proxy resolver" error
+      // Removed --no-zygote: not needed without single-process
       
       // Cache & Disk (reduced for high concurrency)
       '--disk-cache-size=33554432',     // 32MB
@@ -110,14 +110,20 @@ class BrowserPool {
       chromeErrors += data.toString();
     });
 
-    const maxWait = 20000;
+    const maxWait = 30000;  // Increased from 20s to 30s
     const startTime = Date.now();
     let lastError = null;
+    let retryCount = 0;
+
+    // Give Chrome a moment to initialize before first check
+    await new Promise(r => setTimeout(r, 1000));
 
     while (Date.now() - startTime < maxWait) {
       try {
         const jsonUrl = `http://127.0.0.1:${port}/json/version`;
-        const response = await fetch(jsonUrl);
+        const response = await fetch(jsonUrl, { 
+          signal: AbortSignal.timeout(5000)  // 5s timeout per fetch
+        });
         if (response.ok) {
           const data = await response.json();
 
@@ -149,8 +155,12 @@ class BrowserPool {
         }
       } catch (e) { 
         lastError = e.message;
+        retryCount++;
       }
-      await new Promise(r => setTimeout(r, 500));
+      
+      // Exponential backoff: start fast, then slow down
+      const waitTime = retryCount < 5 ? 500 : retryCount < 15 ? 1000 : 2000;
+      await new Promise(r => setTimeout(r, waitTime));
     }
 
     // Browser failed to start - capture all error details
