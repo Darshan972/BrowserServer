@@ -100,11 +100,19 @@ class BrowserPool {
     }
 
     const browserProcess = spawn(this.chromiumPath, args, {
-      stdio: 'ignore',
+      stdio: 'pipe',  // Changed from 'ignore' to capture errors
       // windowsHide: true
     });
+    
+    // Log Chrome stderr for debugging
+    let chromeErrors = '';
+    browserProcess.stderr?.on('data', (data) => {
+      chromeErrors += data.toString();
+    });
+
     const maxWait = 20000;
     const startTime = Date.now();
+    let lastError = null;
 
     while (Date.now() - startTime < maxWait) {
       try {
@@ -139,9 +147,20 @@ class BrowserPool {
             return { id, wss: realWss, portt, headful };
           }
         }
-      } catch { }
+      } catch (e) { 
+        lastError = e.message;
+      }
       await new Promise(r => setTimeout(r, 500));
     }
+
+    // Browser failed to start - capture all error details
+    browserProcess.kill();
+    
+    let errorMsg = `Browser ${id} failed to start DevTools in ${maxWait}ms`;
+    if (lastError) errorMsg += ` (Last error: ${lastError})`;
+    if (chromeErrors) errorMsg += ` (Chrome stderr: ${chromeErrors.substring(0, 200)})`;
+    
+    throw new Error(errorMsg);
 
 
     browserProcess.kill();
