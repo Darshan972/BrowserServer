@@ -70,9 +70,10 @@ process.on('SIGTERM', async () => {
   });
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`\n🚀 Browser Server: http://localhost:${port}`);
+// ✅ FIXED: Listen on all interfaces (0.0.0.0) instead of just localhost
+server.listen(port, '0.0.0.0', () => {
+  console.log(`\n🚀 Browser Server: http://0.0.0.0:${port}`);
   console.log(`📊 Max browsers: ${config.maxBrowsers}`);
   console.log(`🔒 API Key: ${config.apiKey ? 'ENABLED' : 'DISABLED'}`);
-  console.log(`✅ Ready!\n`);
+  console.log(`✅ Ready and accessible from external connections!\n`);
 });

@@ -41,23 +41,55 @@ class BrowserPool {
     const id = `${domainPrefix}${uuid}`;
 
 
-    const ports = portNumbers(8000, 8100);
+    // ✅ FIXED: Increased port range from 8000-8100 to 9000-19000 (10,000 ports)
+    const ports = portNumbers(9000, 19000);
     const port = await getPort({ port: ports });
     const dataDir = join(tmpdir(), `browser-${id}`);
 
     await fs.mkdir(dataDir, { recursive: true });
 
-
+    // ✅ OPTIMIZED: Chrome args for Ubuntu server - prevents OOM kills and crashes
     const args = [
       `--remote-debugging-address=127.0.0.1`,
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${dataDir}`,
       `--window-size=1346,766`,
       headful ? '--disable-headless' : '--headless=new',
-      `--disk-cache-size=67108864`,
-      `--media-cache-size=33554432`
+      
+      // Memory & Performance - CRITICAL for Ubuntu servers
+      '--disable-dev-shm-usage',        // CRITICAL: Fixes /dev/shm too small
+      '--no-sandbox',                   // CRITICAL for Docker/Ubuntu servers
+      '--disable-setuid-sandbox',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-accelerated-2d-canvas',
+      '--no-zygote',                    // Reduces memory overhead
+      '--single-process',               // Each browser is isolated
+      
+      // Cache & Disk (reduced for high concurrency)
+      '--disk-cache-size=33554432',     // 32MB
+      '--media-cache-size=16777216',    // 16MB
+      '--disable-application-cache',
+      
+      // Disable Unnecessary Features
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-background-networking',
+      '--disable-default-apps',
+      '--disable-sync',
+      '--disable-translate',
+      '--hide-scrollbars',
+      '--mute-audio',
+      '--no-first-run',
+      '--disable-notifications',
+      '--disable-logging',
+      '--disable-permissions-api',
+      
+      // Font & Rendering (reduces memory)
+      '--font-render-hinting=none',
+      '--disable-webgl',
+      '--disable-webgl2'
     ].filter(Boolean);
-
 
     if (proxyServer) {
       try {
